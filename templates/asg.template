@@ -1,6 +1,9 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CFT to create an Auto Scaling Group with Life cycle hooks.
+Description: This template creates an Auto Scaling Group with
+  Life cycle hooks.**WARNING** This template creates AWS
+  resources. You will be billed for the AWS resources used if
+  you create a stack from this template.
 Parameters:
   ScaleUpThreshold:
     Type: Number
@@ -34,26 +37,51 @@ Parameters:
   FortiGateEC2Type:
     Type: String
     AllowedValues:
-    - m3.medium
-    - m3.large
-    - m3.xlarge
-    - m3.2xlarge
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - t3.medium
+    - m5d.large
+    - m5d.xlarge
+    - m5d.2xlarge
+    - m5d.4xlarge
+    - m5d.12xlarge
+    - m5d.24xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    - c5d.large
+    - c5d.xlarge
+    - c5d.2xlarge
+    - c5d.4xlarge
+    - c5d.9xlarge
+    - c5d.18xlarge
+    - c5.large
+    - c5.xlarge
+    - c5.2xlarge
+    - c5.4xlarge
+    - c5.9xlarge
+    - c5.18xlarge
     - c4.large
     - c4.xlarge
     - c4.2xlarge
-    - c3.large
-    - c3.xlarge
-    - c3.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
   FortiGateKeyPair:
     Type: AWS::EC2::KeyPair::KeyName
-  S3ConfigBucket:
-    Type: String
-  S3ConfigObject:
-    Type: String
-  ListenerPort:
-    Type: Number
-  HealthCheckPort:
-    Type: Number
   VPCID:
     Type: String
   AZForFirewall1:
@@ -77,42 +105,44 @@ Mappings:
       ScaleUp: '80'
       ScaleDown: '70'
     ConcurrentSessions:
-      ScaleUp: '8000'
-      ScaleDown: '6000'
-    SessionSetupRate:
       ScaleUp: '450000'
       ScaleDown: '400000'
+    SessionSetupRate:
+      ScaleUp: '8000'
+      ScaleDown: '6000'
   RegionMap:
+    AMI:
+      fgtodami: FortiGate-VM64-AWSONDEMAND build0131 (6.0.2) GA-3124a694-441c-4ff1-8bf7-4d153be424a6-ami-0edea6b5399e4d985.4
     us-east-1:
-      fgtodami: ami-48400137
+      fgtodami: ami-0426217b
     us-east-2:
-      fgtodami: ami-340a3451
+      fgtodami: ami-a94c76cc
     us-west-1:
-      fgtodami: ami-05de3a66
+      fgtodami: ami-408e6323
     us-west-2:
-      fgtodami: ami-b6befdce
+      fgtodami: ami-42dc833a
     ca-central-1:
-      fgtodami: ami-25028141
+      fgtodami: ami-05911c61
     eu-central-1:
-      fgtodami: ami-6a85b581
+      fgtodami: ami-89161662
     eu-west-1:
-      fgtodami: ami-3da3ae44
+      fgtodami: ami-17e0f9fd
     eu-west-2:
-      fgtodami: ami-878d63e0
+      fgtodami: ami-5ca64c3b
     eu-west-3:
-      fgtodami: ami-ae2e9fd3
+      fgtodami: ami-2d883850
     ap-southeast-1:
-      fgtodami: ami-5f6a6d23
+      fgtodami: ami-b546025f
     ap-southeast-2:
-      fgtodami: ami-6eaa750c
+      fgtodami: ami-35be1957
     ap-northeast-1:
-      fgtodami: ami-2865a957
+      fgtodami: ami-ff4b2012
     ap-northeast-2:
-      fgtodami: ami-dc9b31b2
+      fgtodami: ami-b89720d6
     ap-south-1:
-      fgtodami: ami-bb88a0d4
+      fgtodami: ami-ce0033a1
     sa-east-1:
-      fgtodami: ami-03461d6f
+      fgtodami: ami-438fa92f
 Conditions:
   CPUSelection:
     Fn::Equals:
@@ -388,12 +418,14 @@ Resources:
             - "-FgtScEvt"
       Cooldown:
         Ref: ASGroupCoolDown
-      DesiredCapacity: '2'
+      DesiredCapacity:
+        Ref: ASGroupMinSize
       LaunchConfigurationName:
         Ref: ASLaunchConfig
       MaxSize:
         Ref: ASGroupMaxSize
-      MinSize: '2'
+      MinSize:
+        Ref: ASGroupMinSize
       NotificationConfigurations:
       - TopicARN:
           Ref: FgtScEvt
@@ -418,19 +450,6 @@ Resources:
       VPCZoneIdentifier:
       - Ref: Public1Subnet
       - Ref: Public2Subnet
-  ASLifecycleTerminateHook:
-    Type: AWS::AutoScaling::LifecycleHook
-    Properties:
-      AutoScalingGroupName:
-        Ref: ASG1
-      LifecycleTransition: "autoscaling:EC2_INSTANCE_TERMINATING"
-      NotificationTargetARN:
-        Ref: FgtScEvt
-      DefaultResult: ABANDON
-      RoleARN:
-        Fn::GetAtt:
-        - SNSRole
-        - Arn
   ASLifecycleLaunchHook:
     Type: AWS::AutoScaling::LifecycleHook
     Properties:
@@ -454,13 +473,26 @@ Resources:
               - Ref: Public2Subnet
               - ":"
               - Ref: Private2Subnet
+  ASLifecycleTerminateHook:
+    Type: AWS::AutoScaling::LifecycleHook
+    Properties:
+      AutoScalingGroupName:
+        Ref: ASG1
+      LifecycleTransition: "autoscaling:EC2_INSTANCE_TERMINATING"
+      NotificationTargetARN:
+        Ref: FgtScEvt
+      DefaultResult: ABANDON
+      RoleARN:
+        Fn::GetAtt:
+        - SNSRole
+        - Arn
   PublicElasticLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name:
         Fn::Join:
         - ''
-        - - Ref: AWS::StackName
+        - - 'Loadbalancer'
           - '-FgtScEvt'
       Scheme: internet-facing
       Subnets:
@@ -473,7 +505,7 @@ Resources:
       Name:
         Fn::Join:
           - ''
-          - - Ref: AWS::StackName
+          - - 'LoadBalancertrgtgrp'
             - "-FgtScEvt"
       Port: 80
       Protocol: TCP
