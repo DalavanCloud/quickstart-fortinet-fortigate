@@ -13,6 +13,7 @@ Metadata:
     - Label:
         default: Network Configuration
       Parameters:
+      - AvailabilityZones
       - VPCCIDR
       - Public1Subnet
       - Public2Subnet
@@ -47,6 +48,8 @@ Metadata:
         - QSS3BucketName
         - QSS3KeyPrefix
     ParameterLabels:
+      AvailabilityZones:
+        default: Availability Zones
       VPCCIDR:
         default: VPC CIDR
       Public1Subnet:
@@ -78,7 +81,7 @@ Metadata:
       ASGroupMaxSize:
         default: Auto Scaling Group Maximum Size
       ASGroupMinSize:
-        default: Autp Scaling Group Minimum Size
+        default: Auto Scaling Group Minimum Size
       ASGroupCoolDown:
         default: Auto Scaling Group Cool Down Period
       SNSEndpointProtocol:
@@ -90,6 +93,11 @@ Metadata:
       KeyPair:
         default: Key Pair
 Parameters:
+  AvailabilityZones:
+    Description: List of Availability Zones to use for the subnets in the VPC. Only
+      two Availability Zones are used for this deployment, and the logical order of
+      your selections is preserved.
+    Type: List<AWS::EC2::AvailabilityZone::Name>
   VPCCIDR:
     AllowedPattern: >-
       ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
@@ -155,7 +163,7 @@ Parameters:
   ASGroupMinSize:
     Type: Number
     Description: Minimum number of instances in the Auto Scaling Group
-    Default: '0'
+    Default: '2'
   ASGroupCoolDown:
     Type: Number
     Default: '300'
@@ -179,7 +187,6 @@ Parameters:
     Description: Enter the protocol for the SNS Endpoint
     Default: https
     AllowedValues:
-    - http
     - https
   CIDRForFGTAccess:
     AllowedPattern: >-
@@ -254,70 +261,48 @@ Parameters:
     ConstraintDescription: >-
       Quick Start key prefix can include numbers, lowercase letters, uppercase
       letters, hyphens (-), and forward slash (/).
-    Default: fortinet-aws-quickstart/
+    Default: fortigate-quickstart/
     Description: >-
       S3 key prefix for the Quick Start assets. Quick Start key prefix can
       include numbers, lowercase letters, uppercase letters, hyphens (-), and
       forward slash (/).
     Type: String
-Conditions:
-  GovCloudCondition: !Equals
-    - !Ref 'AWS::Region'
-    - us-gov-west-1
 Resources:
-  VPC:
+  VPCStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub
-        - >-
-          https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/vpc.template
-        - QSS3Region: !If
-            - GovCloudCondition
-            - s3-us-gov-west-1
-            - s3
-      TimeoutInMinutes: '20'
+      TemplateURL:
+        Fn::Sub: https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template
       Parameters:
-        VPCCIDR: !Ref VPCCIDR
-        AZForSubnet1: !Select
-          - 0
-          - Fn::GetAZs: !Ref 'AWS::Region'
-        AZForSubnet2: !Select
-          - 1
-          - Fn::GetAZs: !Ref 'AWS::Region'
-        Public1Subnet: !Ref Public1Subnet
-        Public2Subnet: !Ref Public2Subnet
-        Private1Subnet: !Ref Private1Subnet
-        Private2Subnet: !Ref Private2Subnet
-  Lambda:
+        AvailabilityZones:
+          Fn::Join:
+          - ','
+          - Ref: AvailabilityZones
+        KeyPairName:
+          Ref: KeyPair
+        NumberOfAZs: '2'
+        PrivateSubnet1ACIDR:
+          Ref: Private1Subnet
+        PrivateSubnet2ACIDR:
+          Ref: Private2Subnet
+        PublicSubnet1CIDR:
+          Ref: Public1Subnet
+        PublicSubnet2CIDR:
+          Ref: Public2Subnet
+        VPCCIDR:
+          Ref: VPCCIDR
+  WorkloadStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub
-        - >-
-          https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/lambda-apigateway.template
-        - QSS3Region: !If
-            - GovCloudCondition
-            - s3-us-gov-west-1
-            - s3
+      TemplateURL:
+        Fn::Sub: https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template
       TimeoutInMinutes: '20'
       Parameters:
-        ApiName: !Ref ApiGateway
-        ApiStageName: !Ref ApiStage
-        LambdaFunctionName: !Ref LambdaFunction
-        S3Bucket: !Ref QSS3BucketName
-        S3Key: !Sub ${QSS3KeyPrefix}submodules/lambda.zip
-    DependsOn: VPC
-  ASG:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: !Sub
-        - >-
-          https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/asg.template
-        - QSS3Region: !If
-            - GovCloudCondition
-            - s3-us-gov-west-1
-            - s3
-      TimeoutInMinutes: '20'
-      Parameters:
+        QSS3BucketName: !Ref QSS3BucketName
+        QSS3KeyPrefix: !Ref QSS3KeyPrefix
+        ApiGateway: !Ref ApiGateway
+        ApiStage: !Ref ApiStage
+        LambdaFunction: !Ref LambdaFunction
         ScalingParameter: !Ref ScalingParameter
         ScaleUpThreshold: !Ref ScaleUpThreshold
         ScaleDownThreshold: !Ref ScaleDownThreshold
@@ -325,23 +310,28 @@ Resources:
         ASGroupMaxSize: !Ref ASGroupMaxSize
         ASGroupMinSize: !Ref ASGroupMinSize
         ASGroupCoolDown: !Ref ASGroupCoolDown
-        SNSNotificationEndpoint: !Sub ${Lambda.Outputs.SNSEndPoint}
         SNSEndpointProtocol: !Ref SNSEndpointProtocol
-        VPCID: !Sub ${VPC.Outputs.VPCID}
-        Public1Subnet: !Sub ${VPC.Outputs.SubnetID1}
-        Public2Subnet: !Sub ${VPC.Outputs.SubnetID3}
-        Private1Subnet: !Sub ${VPC.Outputs.SubnetID2}
-        Private2Subnet: !Sub ${VPC.Outputs.SubnetID4}
-        AZForFirewall1: !Sub ${VPC.Outputs.AZ1}
-        AZForFirewall2: !Sub ${VPC.Outputs.AZ2}
+        VPCID:
+          Fn::GetAtt:
+          - VPCStack
+          - Outputs.VPCID
+        PublicSubnet1ID:
+          Fn::GetAtt:
+          - VPCStack
+          - Outputs.PublicSubnet1ID
+        PublicSubnet2ID:
+          Fn::GetAtt:
+          - VPCStack
+          - Outputs.PublicSubnet2ID
+        PrivateSubnet1ID:
+          Fn::GetAtt:
+          - VPCStack
+          - Outputs.PrivateSubnet1AID
+        PrivateSubnet2ID:
+          Fn::GetAtt:
+          - VPCStack
+          - Outputs.PrivateSubnet2AID
         FortiGateEC2Type: !Ref FortiGateEC2Type
         CIDRForFGTAccess: !Ref CIDRForFGTAccess
-        FortiGateKeyPair: !Ref KeyPair
-    DependsOn: Lambda
-Outputs:
-  VPCID:
-    Value: !Sub ${VPC.Outputs.VPCID}
-    Description: VPC ID
-  SNSNotificationEndpoint:
-    Value: !Sub ${Lambda.Outputs.SNSEndPoint}
-    Description: SNS Endpoint
+        KeyPair: !Ref KeyPair
+    DependsOn: VPCStack

@@ -29,7 +29,6 @@ Parameters:
   SNSEndpointProtocol:
     Type: String
     AllowedValues:
-    - http
     - https
   CIDRForFGTAccess:
     Type: String
@@ -83,19 +82,15 @@ Parameters:
   FortiGateKeyPair:
     Type: AWS::EC2::KeyPair::KeyName
   VPCID:
-    Type: String
-  AZForFirewall1:
-    Type: AWS::EC2::AvailabilityZone::Name
-  AZForFirewall2:
-    Type: AWS::EC2::AvailabilityZone::Name
+    Type: AWS::EC2::VPC::Id
   Public1Subnet:
-    Type: String
+    Type: AWS::EC2::Subnet::Id
   Public2Subnet:
-    Type: String
+    Type: AWS::EC2::Subnet::Id
   Private1Subnet:
-    Type: String
+    Type: AWS::EC2::Subnet::Id
   Private2Subnet:
-    Type: String
+    Type: AWS::EC2::Subnet::Id
 Mappings:
   DefaultScalingupDownMap:
     CPUUtilization:
@@ -116,33 +111,33 @@ Mappings:
     us-east-1:
       fgtodami: ami-0426217b
     us-east-2:
-      fgtodami: ami-a94c76cc
+      fgtodami: ami-340a3451
     us-west-1:
-      fgtodami: ami-408e6323
+      fgtodami: ami-05de3a66
     us-west-2:
-      fgtodami: ami-42dc833a
+      fgtodami: ami-b6befdce
     ca-central-1:
-      fgtodami: ami-05911c61
+      fgtodami: ami-25028141
     eu-central-1:
-      fgtodami: ami-89161662
+      fgtodami: ami-6a85b581
     eu-west-1:
-      fgtodami: ami-17e0f9fd
+      fgtodami: ami-3da3ae44
     eu-west-2:
-      fgtodami: ami-5ca64c3b
+      fgtodami: ami-878d63e0
     eu-west-3:
-      fgtodami: ami-2d883850
+      fgtodami: ami-ae2e9fd3
     ap-southeast-1:
-      fgtodami: ami-b546025f
+      fgtodami: ami-5f6a6d23
     ap-southeast-2:
-      fgtodami: ami-35be1957
+      fgtodami: ami-6eaa750c
     ap-northeast-1:
-      fgtodami: ami-ff4b2012
+      fgtodami: ami-2865a957
     ap-northeast-2:
-      fgtodami: ami-b89720d6
+      fgtodami: ami-dc9b31b2
     ap-south-1:
-      fgtodami: ami-ce0033a1
+      fgtodami: ami-bb88a0d4
     sa-east-1:
-      fgtodami: ami-438fa92f
+      fgtodami: ami-03461d6f
 Conditions:
   CPUSelection:
     Fn::Equals:
@@ -443,9 +438,6 @@ Resources:
           - ''
           - - Ref: AWS::StackName
             - "-Fortigate"
-        PropagateAtLaunch: 'true'
-      - Key: s3-config-path
-        Value: "s3://mdw-lambda-config/current.conf"
         PropagateAtLaunch: 'true'
       VPCZoneIdentifier:
       - Ref: Public1Subnet
